@@ -299,6 +299,10 @@ async def web_concept_view(
             for s in concept.schemes
         ]
 
+        scheme_labels = {
+            cs.id_: best_label(cs, language) for cs in await service.concept_scheme_get_all()
+        }
+
         associations = await service.association_get_all(source_concept_iri=concept.id_)
         formatted_associations = []
         for obj in filter(lambda x: x.kind == AssociationKind.simple, associations):
@@ -353,6 +357,7 @@ async def web_concept_view(
                 "language_selector": languages,
                 "language": language,
                 "associations": formatted_associations,
+                "scheme_labels": scheme_labels,
                 # "conditional_associations": conditional_associations,
                 "suggest_api_url": get_full_api_path("suggest"),
             },
