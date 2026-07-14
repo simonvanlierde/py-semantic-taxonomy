@@ -103,6 +103,7 @@ celerybeat.pid
 
 # Environments
 .env
+pyst-config.env
 .venv
 env/
 venv/

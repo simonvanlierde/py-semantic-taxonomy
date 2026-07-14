@@ -1,0 +1,9 @@
+.git
+.venv
+__pycache__
+*.pyc
+tests
+docs
+site
+*.env
+pyst-config.env
