@@ -84,6 +84,27 @@ async def test_create_relationships_mixed_batch(sqlite, graph, relationships):
     assert await graph.relationships_get(iri="x") == [new]
 
 
+async def test_create_relationships_intra_batch_exact_duplicate(sqlite, graph):
+    # The same new relationship repeated within one call is inserted once, not an error.
+    dup = Relationship(source="x", target="y", predicate=RelationshipVerbs.exact_match)
+    out = await graph.relationships_create([dup, dup])
+    assert out == [dup, dup]
+
+    assert await graph.relationships_get(iri="x") == [dup]
+
+
+async def test_create_relationships_intra_batch_conflict(sqlite, graph):
+    # Two relationships in one call sharing source and target but differing in predicate
+    # is a conflict, not a silent failure.
+    with pytest.raises(DuplicateRelationship):
+        await graph.relationships_create(
+            [
+                Relationship(source="x", target="y", predicate=RelationshipVerbs.broad_match),
+                Relationship(source="x", target="y", predicate=RelationshipVerbs.close_match),
+            ]
+        )
+
+
 async def test_delete_concept(sqlite, graph, relationships):
     response = await graph.relationships_delete(relationships)
     assert response == 5, "Wrong number of deleted relationships"

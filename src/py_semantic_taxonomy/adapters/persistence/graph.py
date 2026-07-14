@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from sqlalchemy import Table, delete, func, insert, join, select, update
+from sqlalchemy import Table, delete, func, insert, join, select, tuple_, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from sqlalchemy.sql import text
@@ -297,51 +297,43 @@ class PostgresKOSGraphDatabase:
         return sorted(rels, key=lambda x: (x.source, x.target))
 
     async def relationships_create(self, relationships: list[Relationship]) -> list[Relationship]:
+        # The (source, target) uniqueness constraint can't see the predicate, so classify
+        # each incoming relationship against what already exists: an exact duplicate (same
+        # source, target, and predicate) is ignored; a clash on (source, target) with a
+        # different predicate is a conflict.
+        def conflict(rel: Relationship) -> DuplicateRelationship:
+            return DuplicateRelationship(
+                f"Relationship between source `{rel.source}` and target `{rel.target}` already exists"
+            )
+
         async with self.engine.connect() as conn:
-            try:
-                await conn.execute(
-                    insert(relationship_table), [obj.to_db_dict() for obj in relationships]
-                )
-            except IntegrityError as exc:
-                await conn.rollback()
-                err = exc._message()
-                if (
-                    # SQLite: Unit tests
-                    "UNIQUE constraint failed: relationship.source, relationship.target"
-                    in err
-                ) or (
-                    # Postgres: Integration tests
-                    'duplicate key value violates unique constraint "relationship_source_target_uniqueness"'
-                    in err
-                ):
-                    # An exact duplicate (same source, target, and predicate) is ignored;
-                    # a clash on (source, target) with a different predicate is a conflict.
-                    to_insert = []
-                    for obj in relationships:
-                        stmt = select(
-                            relationship_table.c.source,
-                            relationship_table.c.target,
-                            relationship_table.c.predicate,
-                        ).where(
-                            relationship_table.c.source == obj.source,
-                            relationship_table.c.target == obj.target,
-                        )
-                        existing = (await conn.execute(stmt)).first()
-                        if existing is None:
-                            to_insert.append(obj)
-                        elif Relationship(**existing._mapping) != obj:
-                            raise DuplicateRelationship(
-                                f"Relationship between source `{obj.source}` and target `{obj.target}` already exists"
-                            )
-                    if to_insert:
-                        await conn.execute(
-                            insert(relationship_table), [obj.to_db_dict() for obj in to_insert]
-                        )
-                        await conn.commit()
-                    return relationships
-                # Fallback - should never happen, but no one is perfect
-                raise exc
-            await conn.commit()
+            pairs = {(obj.source, obj.target) for obj in relationships}
+            stmt = select(
+                relationship_table.c.source,
+                relationship_table.c.target,
+                relationship_table.c.predicate,
+            ).where(tuple_(relationship_table.c.source, relationship_table.c.target).in_(pairs))
+            known = {(row.source, row.target): Relationship(**row._mapping) for row in await conn.execute(stmt)}
+
+            to_insert = []
+            for obj in relationships:
+                prior = known.get((obj.source, obj.target))
+                if prior is None:
+                    known[(obj.source, obj.target)] = obj  # also catches intra-batch clashes
+                    to_insert.append(obj)
+                elif prior != obj:
+                    raise conflict(obj)
+
+            if to_insert:
+                try:
+                    await conn.execute(
+                        insert(relationship_table), [obj.to_db_dict() for obj in to_insert]
+                    )
+                    await conn.commit()
+                except IntegrityError:
+                    # A concurrent insert of the same (source, target) beat us here.
+                    await conn.rollback()
+                    raise conflict(to_insert[0])
         return relationships
 
     async def relationships_delete(self, relationships: list[Relationship]) -> int:
