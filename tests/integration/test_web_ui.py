@@ -186,10 +186,15 @@ async def test_web_concept_view_association_shows_scheme_and_notation(
     assert response.status_code == 200
     html = response.text
 
-    # Target of the association is cn2024/010011000090, which has notation "I"
-    # and belongs to the "Combined Nomenclature, 2024" scheme.
-    assert "Combined Nomenclature, 2024 (CN 2024)" in html
-    assert "fa-hashtag" in html
+    # The association target cn2024/010011000090 renders its label, notation "I",
+    # and its scheme inside the associations card. Its English label appears only
+    # there (the current concept and its narrower/broader are all in cn2023), so
+    # slice from the label to scope the assertions to the association card and
+    # avoid matching the notation icons of unrelated broader/narrower concepts.
+    assert "SECTION I - LIVE ANIMALS" in html
+    card = html[html.index("SECTION I - LIVE ANIMALS"):]
+    assert "fa-hashtag" in card
+    assert "Combined Nomenclature, 2024 (CN 2024)" in card
 
 
 async def test_web_search_with_regular_text_not_treated_as_iri(anonymous_client):
