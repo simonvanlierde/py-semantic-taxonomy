@@ -299,10 +299,6 @@ async def web_concept_view(
             for s in concept.schemes
         ]
 
-        scheme_labels = {
-            cs.id_: best_label(cs, language) for cs in await service.concept_scheme_get_all()
-        }
-
         associations = await service.association_get_all(source_concept_iri=concept.id_)
         formatted_associations = []
         for obj in filter(lambda x: x.kind == AssociationKind.simple, associations):
@@ -326,6 +322,14 @@ async def web_concept_view(
                             "http://qudt.org/3.0.0/schema/qudt/conversionMultiplier"
                         ),
                     })
+
+        # Map scheme IRI -> label for the association display, falling back to the
+        # IRI when a scheme has no label in this language. Only queried when there
+        # are associations to label.
+        scheme_labels = {
+            cs.id_: value_for_language(cs.pref_labels, language) or cs.id_
+            for cs in (await service.concept_scheme_get_all() if formatted_associations else [])
+        }
 
         languages = [
             (request.url, Language.get(language).display_name(language).title())
