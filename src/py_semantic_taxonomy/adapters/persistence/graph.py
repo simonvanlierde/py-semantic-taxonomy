@@ -314,17 +314,31 @@ class PostgresKOSGraphDatabase:
                     'duplicate key value violates unique constraint "relationship_source_target_uniqueness"'
                     in err
                 ):
-                    # Provide useful feedback by identifying which relationship already exists
+                    # An exact duplicate (same source, target, and predicate) is ignored;
+                    # a clash on (source, target) with a different predicate is a conflict.
+                    to_insert = []
                     for obj in relationships:
-                        stmt = select(func.count("*")).where(
+                        stmt = select(
+                            relationship_table.c.source,
+                            relationship_table.c.target,
+                            relationship_table.c.predicate,
+                        ).where(
                             relationship_table.c.source == obj.source,
                             relationship_table.c.target == obj.target,
                         )
-                        count = (await conn.execute(stmt)).first()[0]
-                        if count:
+                        existing = (await conn.execute(stmt)).first()
+                        if existing is None:
+                            to_insert.append(obj)
+                        elif Relationship(**existing._mapping) != obj:
                             raise DuplicateRelationship(
                                 f"Relationship between source `{obj.source}` and target `{obj.target}` already exists"
                             )
+                    if to_insert:
+                        await conn.execute(
+                            insert(relationship_table), [obj.to_db_dict() for obj in to_insert]
+                        )
+                        await conn.commit()
+                    return relationships
                 # Fallback - should never happen, but no one is perfect
                 raise exc
             await conn.commit()
