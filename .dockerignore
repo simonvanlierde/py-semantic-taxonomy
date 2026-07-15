@@ -6,4 +6,3 @@ tests
 docs
 site
 *.env
-pyst-config.env
