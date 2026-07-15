@@ -71,6 +71,20 @@ class PostgresKOSGraphDatabase:
             await conn.rollback()
         return Concept(**result._mapping)
 
+    async def concepts_hierarchy_info(
+        self, iris: list[str]
+    ) -> list[tuple[str, set[str], bool]]:
+        """For each known concept IRI: its Concept Scheme IRIs and whether it is a top concept."""
+        async with self.engine.connect() as conn:
+            stmt = select(
+                concept_table.c.id_,
+                concept_table.c.schemes,
+                concept_table.c.top_concept_of,
+            ).where(concept_table.c.id_.in_(iris))
+            rows = (await conn.execute(stmt)).all()
+            await conn.rollback()
+        return [(row.id_, {s["@id"] for s in row.schemes}, bool(row.top_concept_of)) for row in rows]
+
     async def concept_get_all_iris(self) -> list[str]:
         async with self.engine.connect() as conn:
             stmt = select(concept_table.c.id_)
@@ -344,18 +358,6 @@ class PostgresKOSGraphDatabase:
                 count += result.rowcount
             await conn.commit()
         return count
-
-    async def relationship_source_target_share_known_concept_scheme(
-        self, relationship: Relationship
-    ) -> bool:
-        async with self.engine.connect() as conn:
-            stmt = select(concept_table.c.schemes).where(
-                concept_table.c.id_.in_([relationship.source, relationship.target])
-            )
-            cursor = (await conn.execute(stmt)).scalars()
-            results = [{obj["@id"] for obj in result} for result in cursor]
-            await conn.rollback()
-        return bool((len(results) < 2) or results[0].intersection(results[1]))
 
     # Correspondence
 

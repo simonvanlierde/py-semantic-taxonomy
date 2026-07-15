@@ -2,7 +2,6 @@ import pytest
 
 from py_semantic_taxonomy.domain.constants import RelationshipVerbs
 from py_semantic_taxonomy.domain.entities import (
-    ConceptNotFoundError,
     HierarchicRelationshipAcrossConceptScheme,
     HierarchyConflict,
     Relationship,
@@ -29,23 +28,22 @@ async def test_relationships_get(graph_service, relationships):
     )
 
 
-async def test_relationship_create(graph_service, relationships, entities):
+async def test_relationship_create(graph_service, relationships):
     mock_kos_graph = graph_service.graph
     mock_kos_graph.relationships_create.return_value = relationships
-    entities[0].top_concept_of = []
-    mock_kos_graph.concept_get.return_value = entities[0]
+    # No concepts fetched => nothing to conflict with, relationships pass through.
+    mock_kos_graph.concepts_hierarchy_info.return_value = []
 
     result = await graph_service.relationships_create(relationships)
     assert result == relationships
     mock_kos_graph.relationships_create.assert_called_with(relationships)
 
 
-async def test_relationship_create_source_is_top_concept(graph_service, relationships, entities):
+async def test_relationship_create_source_is_top_concept(graph_service, relationships):
     mock_kos_graph = graph_service.graph
-    entities[0].top_concept_of = [{"@id": "http://data.europa.eu/xsp/cn2024/cn2024"}]
-    mock_kos_graph.concept_get.return_value = entities[0]
-
     broader = next(r for r in relationships if r.predicate == RelationshipVerbs.broader)
+    mock_kos_graph.concepts_hierarchy_info.return_value = [(broader.source, {"scheme"}, True)]
+
     with pytest.raises(HierarchyConflict) as excinfo:
         await graph_service.relationships_create([broader])
     assert excinfo.match("is marked as `topConceptOf`")
@@ -55,7 +53,7 @@ async def test_relationship_create_source_is_top_concept(graph_service, relation
 async def test_relationship_create_source_concept_missing(graph_service, relationships):
     mock_kos_graph = graph_service.graph
     mock_kos_graph.relationships_create.return_value = relationships
-    mock_kos_graph.concept_get.side_effect = ConceptNotFoundError
+    mock_kos_graph.concepts_hierarchy_info.return_value = []
 
     broader = next(r for r in relationships if r.predicate == RelationshipVerbs.broader)
     await graph_service.relationships_create([broader])
@@ -64,9 +62,11 @@ async def test_relationship_create_source_concept_missing(graph_service, relatio
 
 async def test_relationship_create_cross_concept_scheme_hierarchical(graph_service, relationships):
     mock_kos_graph = graph_service.graph
-    mock_kos_graph.relationship_source_target_share_known_concept_scheme.return_value = False
-
     rel = relationships[3]
+    mock_kos_graph.concepts_hierarchy_info.return_value = [
+        (rel.source, {"a"}, False),
+        (rel.target, {"b"}, False),
+    ]
 
     with pytest.raises(HierarchicRelationshipAcrossConceptScheme) as excinfo:
         await graph_service.relationships_create([rel])
@@ -93,15 +93,16 @@ async def test_relationship_create_reference_concept_scheme(graph_service, relat
 
 async def test_relationship_create_cross_concept_scheme_associative(graph_service, relationships):
     mock_kos_graph = graph_service.graph
-    mock_kos_graph.relationship_source_target_share_known_concept_scheme.return_value = False
+    mock_kos_graph.concepts_hierarchy_info.return_value = []
 
     associative = Relationship(
         source=relationships[3].source,
         target=relationships[3].target,
         predicate=RelationshipVerbs.broad_match,
     )
+    # Associative relationships are allowed to cross Concept Schemes.
     await graph_service.relationships_create([associative])
-    mock_kos_graph.relationship_source_target_share_known_concept_scheme.assert_not_called()
+    mock_kos_graph.relationships_create.assert_called_with([associative])
 
 
 async def test_relationship_delete(graph_service, relationships):
