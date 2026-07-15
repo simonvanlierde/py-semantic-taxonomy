@@ -297,17 +297,13 @@ class PostgresKOSGraphDatabase:
         return sorted(rels, key=lambda x: (x.source, x.target))
 
     async def relationships_create(self, relationships: list[Relationship]) -> list[Relationship]:
-        # The (source, target) uniqueness constraint can't see the predicate, so classify
-        # each incoming relationship against what already exists: an exact duplicate (same
-        # source, target, and predicate) is ignored; a clash on (source, target) with a
-        # different predicate is a conflict.
-        def conflict(rel: Relationship) -> DuplicateRelationship:
-            return DuplicateRelationship(
-                f"Relationship between source `{rel.source}` and target `{rel.target}` already exists"
-            )
-
-        async with self.engine.connect() as conn:
-            pairs = {(obj.source, obj.target) for obj in relationships}
+        # The (source, target) uniqueness constraint can't see the predicate, so we classify
+        # each incoming relationship against the current rows rather than let the DB decide.
+        async def to_insert(conn, candidates: list[Relationship]) -> list[Relationship]:
+            # Split candidates against the current rows: an exact duplicate (same source,
+            # target, and predicate) is dropped as an idempotent no-op; a clash on
+            # (source, target) with a different predicate raises DuplicateRelationship.
+            pairs = {(obj.source, obj.target) for obj in candidates}
             stmt = select(
                 relationship_table.c.source,
                 relationship_table.c.target,
@@ -315,25 +311,33 @@ class PostgresKOSGraphDatabase:
             ).where(tuple_(relationship_table.c.source, relationship_table.c.target).in_(pairs))
             known = {(row.source, row.target): Relationship(**row._mapping) for row in await conn.execute(stmt)}
 
-            to_insert = []
-            for obj in relationships:
+            new = []
+            for obj in candidates:
                 prior = known.get((obj.source, obj.target))
                 if prior is None:
                     known[(obj.source, obj.target)] = obj  # also catches intra-batch clashes
-                    to_insert.append(obj)
+                    new.append(obj)
                 elif prior != obj:
-                    raise conflict(obj)
-
-            if to_insert:
-                try:
-                    await conn.execute(
-                        insert(relationship_table), [obj.to_db_dict() for obj in to_insert]
+                    raise DuplicateRelationship(
+                        f"Relationship between source `{obj.source}` and target `{obj.target}` already exists"
                     )
+            return new
+
+        async with self.engine.connect() as conn:
+            new = await to_insert(conn, relationships)
+            if new:
+                try:
+                    await conn.execute(insert(relationship_table), [obj.to_db_dict() for obj in new])
                     await conn.commit()
                 except IntegrityError:
-                    # A concurrent insert of the same (source, target) beat us here.
+                    # A concurrent insert beat us on a (source, target) pair. Re-classify
+                    # against the now-current rows: an exact duplicate is ignored, a real
+                    # predicate clash raises, and any non-uniqueness error re-raises as-is.
                     await conn.rollback()
-                    raise conflict(to_insert[0])
+                    new = await to_insert(conn, new)
+                    if new:
+                        await conn.execute(insert(relationship_table), [obj.to_db_dict() for obj in new])
+                        await conn.commit()
         return relationships
 
     async def relationships_delete(self, relationships: list[Relationship]) -> int:

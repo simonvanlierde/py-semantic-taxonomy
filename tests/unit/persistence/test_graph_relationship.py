@@ -105,6 +105,34 @@ async def test_create_relationships_intra_batch_conflict(sqlite, graph):
         )
 
 
+async def test_create_relationships_retries_after_integrity_race(sqlite, graph):
+    # A concurrent writer can insert an overlapping (source, target) pair between our
+    # snapshot read and our insert, raising IntegrityError. That must be re-classified
+    # and retried, not surfaced as a spurious DuplicateRelationship (issue #41).
+    from unittest import mock
+
+    from sqlalchemy.exc import IntegrityError
+    from sqlalchemy.ext.asyncio import AsyncConnection
+    from sqlalchemy.sql.dml import Insert
+
+    rel = Relationship(source="x", target="y", predicate=RelationshipVerbs.exact_match)
+    original = AsyncConnection.execute
+    inserts = {"n": 0}
+
+    async def flaky_execute(self, statement, *args, **kwargs):
+        if isinstance(statement, Insert):
+            inserts["n"] += 1
+            if inserts["n"] == 1:
+                raise IntegrityError("simulated race", None, Exception("UNIQUE"))
+        return await original(self, statement, *args, **kwargs)
+
+    with mock.patch.object(AsyncConnection, "execute", flaky_execute):
+        out = await graph.relationships_create([rel])
+
+    assert out == [rel]
+    assert await graph.relationships_get(iri="x") == [rel]
+
+
 async def test_delete_concept(sqlite, graph, relationships):
     response = await graph.relationships_delete(relationships)
     assert response == 5, "Wrong number of deleted relationships"
