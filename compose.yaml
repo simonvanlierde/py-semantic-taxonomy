@@ -1,5 +1,8 @@
 # Development-only Postgres + Typesense, as an alternative to the scripts/ helpers.
 # `docker compose up -d` to start, `docker compose down` to stop.
+# Published ports bind to 127.0.0.1 only: this stack ships default credentials
+# (pyst/pyst, api key 123abc, auth token supersecret) and is not meant to be
+# reachable from other hosts. Drop the 127.0.0.1: prefix only behind a firewall.
 services:
   postgres:
     image: postgres:16
@@ -10,7 +13,7 @@ services:
       POSTGRES_DB: ${PyST_db_name:-PyST}
     ports:
       # Same env var the app reads, so set PyST_db_port to move both if 5432 is taken.
-      - "${PyST_db_port:-5432}:5432"
+      - "127.0.0.1:${PyST_db_port:-5432}:5432"
     volumes:
       - pyst-postgres:/var/lib/postgresql/data
     healthcheck:
@@ -25,7 +28,7 @@ services:
     environment:
       TYPESENSE_API_KEY: ${PyST_typesense_api_key:-123abc}
     ports:
-      - "8108:8108"
+      - "127.0.0.1:8108:8108"
     volumes:
       - pyst-typesense:/data
     healthcheck:
@@ -41,7 +44,7 @@ services:
     profiles: ["demo"]
     build: .
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       # Network addresses are fixed for the compose network (internal ports).
       PyST_db_host: postgres
