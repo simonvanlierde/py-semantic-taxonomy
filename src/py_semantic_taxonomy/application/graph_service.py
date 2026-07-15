@@ -183,6 +183,22 @@ class GraphService:
                     f"Hierarchical relationship between `{rel.source}` and `{rel.target}` crosses Concept Schemes. Use an associative relationship like `skos:broadMatch` instead."
                 )
 
+    async def _relationships_check_source_not_top_concept(
+        self, relationships: list[Relationship]
+    ) -> None:
+        for rel in relationships:
+            if rel.predicate != RelationshipVerbs.broader:
+                continue
+            try:
+                source = await self.graph.concept_get(rel.source)
+            except ConceptNotFoundError:
+                # No concept means nothing marked as `topConceptOf` to conflict with.
+                continue
+            if source.top_concept_of:
+                raise HierarchyConflict(
+                    f"Concept `{rel.source}` is marked as `topConceptOf` but was given a broader relationship to `{rel.target}`"
+                )
+
     async def relationships_create(self, relationships: list[Relationship]) -> list[Relationship]:
         concept_schemes = await self.concept_scheme_get_all_iris()
         for rel in relationships:
@@ -196,6 +212,7 @@ class GraphService:
                 )
 
         await self._relationships_check_source_target_share_known_concept_scheme(relationships)
+        await self._relationships_check_source_not_top_concept(relationships)
         return await self.graph.relationships_create(relationships)
 
     async def relationships_delete(self, relationships: list[Relationship]) -> int:

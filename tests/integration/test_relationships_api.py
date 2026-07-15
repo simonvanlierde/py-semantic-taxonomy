@@ -69,6 +69,22 @@ async def test_create_relationships(postgres, cn_db_engine, client):
 
 
 @pytest.mark.postgres
+async def test_create_relationships_source_is_top_concept(postgres, cn_db_engine, client):
+    # `010011000090` is `topConceptOf` cn2024, so it can't be given a broader relationship.
+    given = [
+        {
+            "@id": "http://data.europa.eu/xsp/cn2024/010011000090",
+            RelationshipVerbs.broader.value: [
+                {"@id": "http://data.europa.eu/xsp/cn2024/010021000090"}
+            ],
+        }
+    ]
+    response = await client.post(get_full_api_path("relationship"), json=given)
+    assert response.status_code == 422
+    assert "is marked as `topConceptOf`" in response.json()["detail"]
+
+
+@pytest.mark.postgres
 async def test_create_relationships_duplicate(postgres, cn_db_engine, client, relationships):
     response = await client.post(
         get_full_api_path("relationship"), json=[relationships[3].to_json_ld()]

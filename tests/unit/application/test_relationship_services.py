@@ -2,7 +2,9 @@ import pytest
 
 from py_semantic_taxonomy.domain.constants import RelationshipVerbs
 from py_semantic_taxonomy.domain.entities import (
+    ConceptNotFoundError,
     HierarchicRelationshipAcrossConceptScheme,
+    HierarchyConflict,
     Relationship,
     RelationshipsReferencesConceptScheme,
 )
@@ -27,13 +29,37 @@ async def test_relationships_get(graph_service, relationships):
     )
 
 
-async def test_relationship_create(graph_service, relationships):
+async def test_relationship_create(graph_service, relationships, entities):
     mock_kos_graph = graph_service.graph
     mock_kos_graph.relationships_create.return_value = relationships
+    entities[0].top_concept_of = []
+    mock_kos_graph.concept_get.return_value = entities[0]
 
     result = await graph_service.relationships_create(relationships)
     assert result == relationships
     mock_kos_graph.relationships_create.assert_called_with(relationships)
+
+
+async def test_relationship_create_source_is_top_concept(graph_service, relationships, entities):
+    mock_kos_graph = graph_service.graph
+    entities[0].top_concept_of = [{"@id": "http://data.europa.eu/xsp/cn2024/cn2024"}]
+    mock_kos_graph.concept_get.return_value = entities[0]
+
+    broader = next(r for r in relationships if r.predicate == RelationshipVerbs.broader)
+    with pytest.raises(HierarchyConflict) as excinfo:
+        await graph_service.relationships_create([broader])
+    assert excinfo.match("is marked as `topConceptOf`")
+    mock_kos_graph.relationships_create.assert_not_called()
+
+
+async def test_relationship_create_source_concept_missing(graph_service, relationships):
+    mock_kos_graph = graph_service.graph
+    mock_kos_graph.relationships_create.return_value = relationships
+    mock_kos_graph.concept_get.side_effect = ConceptNotFoundError
+
+    broader = next(r for r in relationships if r.predicate == RelationshipVerbs.broader)
+    await graph_service.relationships_create([broader])
+    mock_kos_graph.relationships_create.assert_called_with([broader])
 
 
 async def test_relationship_create_cross_concept_scheme_hierarchical(graph_service, relationships):

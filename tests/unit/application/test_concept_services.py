@@ -29,6 +29,7 @@ async def test_concept_create(graph_service, cn, entities, relationships):
 
     mock_kos_graph = graph_service.graph
     mock_kos_graph.concept_create.return_value = entities[0]
+    mock_kos_graph.concept_get.return_value = entities[0]
     mock_kos_graph.concept_scheme_get_all_iris.return_value = [cn.scheme["@id"]]
 
     result = await graph_service.concept_create(entities[0])

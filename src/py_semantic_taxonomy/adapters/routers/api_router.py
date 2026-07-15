@@ -380,6 +380,7 @@ async def relationships_create(
     except (
         de.HierarchicRelationshipAcrossConceptScheme,
         de.RelationshipsReferencesConceptScheme,
+        de.HierarchyConflict,
     ) as err:
         raise HTTPException(status_code=422, detail=str(err))
 
