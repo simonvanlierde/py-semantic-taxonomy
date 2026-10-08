@@ -220,20 +220,20 @@ async def test_create_concept_relationships_across_scheme(
 
 
 @pytest.mark.postgres
-async def test_create_concept_relationships_duplicate(
+async def test_create_concept_relationships_exact_duplicate_ignored(
     postgres, cn_db_engine, cn, client, relationships
 ):
+    # `concept_low`'s broader relationship is already in the database; an exact
+    # duplicate is a no-op (issue #41), so the concept is still created.
     new_concept = cn.concept_low
     new_concept[f"{SKOS}broader"].extend(new_concept[f"{SKOS}broader"])
     response = await client.post(
         get_full_api_path("concept", iri=new_concept["@id"]), json=new_concept
     )
-
-    assert response.status_code == 422
-    assert response.json()["detail"].endswith("already exists"), "API return value incorrect"
+    assert response.status_code == 200
 
     response = await client.get(get_full_api_path("concept", iri=new_concept["@id"]))
-    assert response.status_code == 404
+    assert response.status_code == 200
 
 
 @pytest.mark.postgres
