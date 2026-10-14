@@ -237,6 +237,22 @@ async def test_create_concept_relationships_exact_duplicate_ignored(
 
 
 @pytest.mark.postgres
+async def test_create_concept_relationships_conflicting_predicate(
+    postgres, cn_db_engine, cn, client, relationships
+):
+    new_concept = cn.concept_low
+    new_concept[f"{SKOS}relatedMatch"] = new_concept[f"{SKOS}broader"]
+    response = await client.post(
+        get_full_api_path("concept", iri=new_concept["@id"]), json=new_concept
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"].endswith("already exists"), "API return value incorrect"
+
+    response = await client.get(get_full_api_path("concept", iri=new_concept["@id"]))
+    assert response.status_code == 404
+
+
+@pytest.mark.postgres
 async def test_create_concept_duplicate(postgres, cn_db_engine, cn, client):
     response = await client.post(
         get_full_api_path("concept", iri=cn.concept_top["@id"]), json=cn.concept_top
