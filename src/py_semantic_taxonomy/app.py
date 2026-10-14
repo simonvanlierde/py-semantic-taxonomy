@@ -8,6 +8,7 @@ from py_semantic_taxonomy.adapters.persistence.database import (
     init_db,
 )
 from py_semantic_taxonomy.adapters.routers.api_router import api_router
+from py_semantic_taxonomy.adapters.routers.catch_router import resolve_iri
 from py_semantic_taxonomy.adapters.routers.catch_router import router as catch_router
 from py_semantic_taxonomy.adapters.routers.web_router import router as web_router
 from py_semantic_taxonomy.dependencies import get_search_service
@@ -38,13 +39,13 @@ def create_app() -> FastAPI:
 
     app.include_router(api_router)
     app.include_router(web_router)
+    app.include_router(catch_router)
     app.mount(
         "/static",
         StaticFiles(directory=Path(__file__).parent / "adapters" / "routers" / "static"),
         name="static",
     )
-    # Registered last: its `/{path:path}` catch-all must not shadow other routes.
-    app.include_router(catch_router)
+    app.router.default = resolve_iri
     return app
 
 
@@ -52,7 +53,7 @@ def test_app() -> FastAPI:
     app = FastAPI()
     app.include_router(api_router)
     app.include_router(web_router)
-    app.include_router(catch_router)
+    app.router.default = resolve_iri
     return app
 
 

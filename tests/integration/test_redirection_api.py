@@ -6,6 +6,12 @@ from py_semantic_taxonomy.domain.url_utils import get_full_api_path
 HTML = {"accept": "text/html"}
 
 
+async def test_trailing_slash_redirect_not_shadowed(client):
+    response = await client.get("/api/v1/status", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"].endswith("/api/v1/status/")
+
+
 @pytest.mark.postgres
 async def test_resolve_iri_not_found(postgres, cn_db_engine, client):
     response = await client.get("/foo", follow_redirects=False)
@@ -20,8 +26,12 @@ async def test_resolve_iri_concept_scheme_json(postgres, cn_db_engine, cn, clien
 
     response = await client.get("/foo", follow_redirects=False)
     assert response.status_code == 200
+    assert response.headers["vary"] == "Accept"
     for key, value in cn.scheme.items():
         assert response.json()[key] == value
+
+    response = await client.head("/foo")
+    assert response.status_code == 200
 
 
 @pytest.mark.postgres
@@ -34,6 +44,7 @@ async def test_resolve_iri_concept_scheme_html_redirects_to_web_ui(
     response = await client.get("/foo", headers=HTML, follow_redirects=False)
     assert response.status_code == 307
     assert "/web/concept_scheme/" in response.headers["location"]
+    assert response.headers["vary"] == "Accept"
 
 
 @pytest.mark.postgres
