@@ -14,9 +14,10 @@ def test_concept_scheme_domain_request_dto_same_fields():
     assert domain_fields.difference(request_fields) == {
         "extra"
     }, "Request validation and domain `ConceptScheme` model fields differ"
-    assert not request_fields.difference(
-        domain_fields
-    ), "Request validation and domain `ConceptScheme` model fields differ"
+    # `license` is only checked on requests; the entity keeps it in `extra`
+    assert request_fields.difference(domain_fields) == {
+        "license"
+    }, "Request validation and domain `ConceptScheme` model fields differ"
 
 
 def test_concept_scheme_domain_response_dto_same_fields():
@@ -59,13 +60,15 @@ def test_concept_scheme_to_db_dict(cn):
             {"@id": "http://publications.europa.eu/resource/authority/corporate-body/TAXUD"},
         ],
         version=[{"@value": "2024"}],
-        license=[{"@id": "https://creativecommons.org/licenses/by/4.0/"}],
         status=[
             {
                 "@id": "http://purl.org/ontology/bibo/status/accepted",
             },
         ],
         extra={
+            "http://purl.org/dc/terms/license": [
+                {"@id": "https://creativecommons.org/licenses/by/4.0/"}
+            ],
             "http://data.europa.eu/eli/ontology#based_on": [
                 {"@id": "http://data.europa.eu/eli/reg_impl/2023/2364/oj"}
             ],
@@ -130,7 +133,6 @@ def test_concept_scheme_filter_language(cn):
         "extra",
         "history_notes",
         "id_",
-        "license",
         "notations",
         "status",
         "types",
@@ -175,13 +177,15 @@ def test_concept_scheme_from_json_ld(cn):
             {"@id": "http://publications.europa.eu/resource/authority/corporate-body/TAXUD"},
         ],
         version=[{"@value": "2024"}],
-        license=[{"@id": "https://creativecommons.org/licenses/by/4.0/"}],
         status=[
             {
                 "@id": "http://purl.org/ontology/bibo/status/accepted",
             },
         ],
         extra={
+            "http://purl.org/dc/terms/license": [
+                {"@id": "https://creativecommons.org/licenses/by/4.0/"}
+            ],
             "http://data.europa.eu/eli/ontology#based_on": [
                 {"@id": "http://data.europa.eu/eli/reg_impl/2023/2364/oj"}
             ],

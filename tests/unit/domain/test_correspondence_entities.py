@@ -12,9 +12,10 @@ def test_correspondence_domain_request_dto_same_fields():
         "extra",
         "made_ofs",
     }, "Request validation and domain `Correspondence` model fields differ"
-    assert not request_fields.difference(
-        domain_fields
-    ), "Request validation and domain `Correspondence` model fields differ"
+    # `license` is only checked on requests; the entity keeps it in `extra`
+    assert request_fields.difference(domain_fields) == {
+        "license"
+    }, "Request validation and domain `Correspondence` model fields differ"
 
 
 def test_correspondence_domain_response_dto_same_fields():
@@ -64,8 +65,10 @@ def test_correspondence_to_db_dict(cn):
             },
         ],
         version=[{"@value": "1.0"}],
-        license=[{"@id": "https://creativecommons.org/licenses/by/4.0/"}],
         extra={
+            "http://purl.org/dc/terms/license": [
+                {"@id": "https://creativecommons.org/licenses/by/4.0/"}
+            ],
             "http://purl.org/dc/terms/description": [
                 {
                     "@language": "en",
@@ -91,7 +94,6 @@ def test_correspondence_from_json_ld(cn):
     expected = Correspondence(
         id_="http://data.europa.eu/xsp/cn2023/CN2023_CN2024",
         types=["http://rdf-vocabulary.ddialliance.org/xkos#Correspondence"],
-        license=[{"@id": "https://creativecommons.org/licenses/by/4.0/"}],
         pref_labels=[
             {"@language": "en", "@value": "Transposition between CN 2023 and CN 2024"},
         ],
@@ -117,6 +119,9 @@ def test_correspondence_from_json_ld(cn):
             },
         ],
         extra={
+            "http://purl.org/dc/terms/license": [
+                {"@id": "https://creativecommons.org/licenses/by/4.0/"}
+            ],
             "http://purl.org/dc/terms/description": [
                 {
                     "@language": "en",

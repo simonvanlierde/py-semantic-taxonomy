@@ -1,6 +1,6 @@
 import pytest
 
-from py_semantic_taxonomy.domain.constants import SKOS
+from py_semantic_taxonomy.domain.constants import DCTERMS, SKOS
 from py_semantic_taxonomy.domain.url_utils import get_full_api_path
 
 
@@ -47,6 +47,7 @@ async def test_create_concept_scheme(postgres, cn_db_engine, cn, client):
     given = (await client.get(get_full_api_path("concept_scheme", iri=new["@id"]))).json()
     for key, value in new.items():
         assert given[key] == value
+    assert given[f"{DCTERMS}license"] == [{"@id": "https://creativecommons.org/licenses/by/4.0/"}]
 
 
 @pytest.mark.postgres

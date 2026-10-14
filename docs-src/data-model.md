@@ -106,7 +106,7 @@ The predicate verb is `http://purl.org/ontology/bibo/status`.
 We impose the following additional constraints on `ConceptScheme` objects:
 
 * At least one `skos:prefLabel` and one `skos:definition` are required
-* `bibo:status`, `dcterms:created`, `dcterms:creator`, and `owl:versionInfo` are required
+* `bibo:status`, `dcterms:created`, `dcterms:creator`, `dcterms:license`, and `owl:versionInfo` are required
 * Exactly one `owl:versionInfo` value is specified
 * At least one definition (`skos:definition`) is given
 * Instead of supplying a (very long) list of `skos:hasTopConcept` concept references, please instead specify `skos:topConceptOf` on the `Concept` instances.
@@ -131,6 +131,11 @@ Here is a minimal `ConceptScheme` example:
     },
     {
       "@id": "http://publications.europa.eu/resource/authority/corporate-body/TAXUD"
+    }
+  ],
+  "http://purl.org/dc/terms/license": [
+    {
+      "@id": "https://creativecommons.org/licenses/by/4.0/"
     }
   ],
   "http://www.w3.org/2002/07/owl#versionInfo": [
@@ -224,7 +229,7 @@ Here is a minimal `Concept` example:
 
 The [XKOS](https://rdf-vocabulary.ddialliance.org/xkos.html) ontology provides the [Correspondence](https://rdf-vocabulary.ddialliance.org/xkos.html#correspondences) class definition, which we use follow the [XKOS best practice guide](http://linked-statistics.github.io/xkos/xkos-best-practices.html). A `Correspondence` instance is very similar to a `ConceptScheme` - it provides metadata for a collection of child nodes.
 
-In addition to our [generic addition restrictions](#general-constraints-and-assumptions), `Correspondence` must have `bibo:status`, `dcterms:created`, `dcterms:creator`, and `owl:versionInfo`, just like `ConceptScheme`.
+In addition to our [generic addition restrictions](#general-constraints-and-assumptions), `Correspondence` must have `bibo:status`, `dcterms:created`, `dcterms:creator`, `dcterms:license`, and `owl:versionInfo`, just like `ConceptScheme`.
 
 Here is an example of a valid `Correspondence` in JSON-LD:
 
@@ -260,6 +265,11 @@ Here is an example of a valid `Correspondence` in JSON-LD:
     },
     {
       "@id": "http://publications.europa.eu/resource/authority/corporate-body/TAXUD"
+    }
+  ],
+  "http://purl.org/dc/terms/license": [
+    {
+      "@id": "https://creativecommons.org/licenses/by/4.0/"
     }
   ],
   "http://www.w3.org/2002/07/owl#versionInfo": [
